@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CSFloat -> Clipboard (Smart Wear)
 // @namespace    http://tampermonkey.net/
-// @version      2.3
+// @version      2.4
 // @description  Kopiuje nazwę itemu + CTRL+Click otwiera CSGOEmpire search (auto-fill)
 // @author       Gemini
 // @match        https://csfloat.com/*
