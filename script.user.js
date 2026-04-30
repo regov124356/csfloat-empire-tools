@@ -1,12 +1,14 @@
 // ==UserScript==
-// @name         CSFloat -> Clipboard (Smart Wear) + Empire Fix
+// @name         CSFloat -> Clipboard (Smart Wear)
 // @namespace    http://tampermonkey.net/
 // @version      2.5
-// @description  Kopiuje nazwę itemu + CTRL+Click otwiera CSGOEmpire search (Poprawione przekazywanie danych)
+// @description  Kopiuje nazwę itemu + CTRL+Click otwiera CSGOEmpire search (auto-fill)
 // @author       Gemini
 // @match        https://csfloat.com/*
 // @match        https://csgoempire.com/*
 // @grant        none
+// @downloadURL  https://raw.githubusercontent.com/regov124356/csfloat-empire-tools/main/script.user.js?ts=2.5
+// @updateURL    https://raw.githubusercontent.com/regov124356/csfloat-empire-tools/main/script.user.js?ts=2.5
 // ==/UserScript==
 
 (function () {
@@ -48,7 +50,7 @@
             if (e.ctrlKey) {
                 e.preventDefault();
                 e.stopPropagation();
-                // Przekazujemy query w hash'u URL, bo sessionStorage nie działa między domenami
+                // Przekazujemy query w hash'u URL (obejście braku wspólnego sessionStorage)
                 const empireUrl = `https://csgoempire.com/withdraw/steam/market#search=${encodeURIComponent(finalQuery)}`;
                 window.open(empireUrl, "_blank");
                 return;
@@ -62,7 +64,6 @@
         }, true);
     }
 
-    // Pozostałe funkcje CSFloat (Style, Rate UI, Price Converter) zostają bez zmian
     function injectStyles() {
         const style = document.createElement('style');
         style.innerHTML = `
@@ -107,48 +108,37 @@
     }
 
     // ==========================================
-    // LOGIKA DLA CSGOEMPIRE.COM
+    // LOGIKA DLA CSGOEMPIRE.COM (Auto-fill)
     // ==========================================
     function handleEmpireSearch() {
-        // Sprawdzamy czy w URL jest hash z wyszukiwaniem
         if (!window.location.hash.includes('#search=')) return;
 
         const query = decodeURIComponent(window.location.hash.split('#search=')[1]);
         if (!query) return;
 
-        // Czekamy aż input się pojawi (Empire to SPA, więc musimy być cierpliwi)
         const searchInterval = setInterval(() => {
             const input = document.querySelector('input[placeholder*="Search"], input[type="text"]');
 
             if (input) {
                 clearInterval(searchInterval);
-                
-                // Wpisujemy tekst
                 input.focus();
                 input.value = query;
-
-                // Wyzwalamy eventy, żeby React/Angular zauważył zmianę
                 input.dispatchEvent(new Event('input', { bubbles: true }));
                 input.dispatchEvent(new Event('change', { bubbles: true }));
-
-                // Czyścimy hash, żeby przy odświeżeniu nie wpisywało tego samego
-                window.location.hash = "";
-                console.log("Empire search filled with:", query);
+                window.location.hash = ""; // Czyścimy URL po wpisaniu
             }
         }, 500);
 
-        // Kill-switch dla intervalu po 10 sekundach (żeby nie muliło jak nie znajdzie)
-        setTimeout(() => clearInterval(searchInterval), 10000);
+        setTimeout(() => clearInterval(searchInterval), 10000); // Stop po 10s jeśli nie znajdzie
     }
 
     // ==========================================
-    // URUCHOMIENIE
+    // INIT
     // ==========================================
     if (window.location.hostname.includes("csfloat.com")) {
         if (document.readyState === "complete") initCSFloat();
         else window.addEventListener("load", initCSFloat);
     } else if (window.location.hostname.includes("csgoempire.com")) {
-        // Na Empire odpalamy od razu i czekamy na element
         handleEmpireSearch();
     }
 })();
