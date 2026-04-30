@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         CSFloat -> Clipboard (Smart Wear)
 // @namespace    http://tampermonkey.net/
-// @version      2.2
-// @description  Kopiuje nazwę itemu + CTRL+Click otwiera CSGOEmpire search
+// @version      2.3
+// @description  Kopiuje nazwę itemu + CTRL+Click otwiera CSGOEmpire search (auto-fill)
 // @author       Gemini
 // @match        https://csfloat.com/*
 // @grant        none
@@ -14,6 +14,8 @@
     'use strict';
 
     const STORAGE_KEY = "empire_rate";
+    const EMPIRE_SEARCH_KEY = "empire_search";
+
     const WEARS = [
         "Factory New",
         "Minimal Wear",
@@ -28,7 +30,6 @@
     function setupItemClicker() {
         document.addEventListener('click', (e) => {
             const targetHeader = e.target.closest('mat-card > div > div:first-child');
-
             if (!targetHeader || !targetHeader.querySelector('app-item-name')) return;
 
             const nameEl = targetHeader.querySelector('.item-name');
@@ -38,36 +39,36 @@
 
             let itemName = nameEl.innerText.trim();
 
-            // usuwanie ★ z początku
+            // usuń ★
             itemName = itemName.replace(/^★\s*/, '');
 
             let subtext = subtextEl ? subtextEl.innerText.trim() : "";
             let finalQuery = itemName;
 
             const foundWear = WEARS.find(wear => subtext.includes(wear));
-
             if (foundWear) {
                 finalQuery += ` (${foundWear})`;
             }
 
             // ==========================================
-            // CTRL + CLICK = otwórz Empire search
+            // CTRL + CLICK → Empire + auto search
             // ==========================================
             if (e.ctrlKey) {
                 e.preventDefault();
                 e.stopPropagation();
 
-                const empireUrl =
-                    `https://csgoempire.com/market?search=${encodeURIComponent(finalQuery)}`;
+                // zapisujemy query do sessionStorage
+                sessionStorage.setItem(EMPIRE_SEARCH_KEY, finalQuery);
 
-                window.open(empireUrl, '_blank');
+                // otwieramy stronę (bez URL search, bo nie działa)
+                window.open("https://csgoempire.com/withdrawals", "_blank");
 
-                console.log("Otwarto Empire search:", finalQuery);
+                console.log("Empire auto-search queued:", finalQuery);
                 return;
             }
 
             // ==========================================
-            // NORMAL CLICK = kopiowanie
+            // NORMAL CLICK → COPY
             // ==========================================
             navigator.clipboard.writeText(finalQuery)
                 .then(() => {
@@ -80,9 +81,7 @@
                         targetHeader.style.background = originalBg;
                     }, 300);
                 })
-                .catch(err => {
-                    console.error("Błąd kopiowania:", err);
-                });
+                .catch(err => console.error("Clipboard error:", err));
 
         }, true);
     }
@@ -193,49 +192,26 @@
     }
 
     // ==========================================
-    // INPUT CONVERTER
+    // INPUT CONVERTER (Empire page)
     // ==========================================
     function handleInputConversion() {
-        const input = document.querySelector(
-            'input[formcontrolname="price"]'
-        );
+        const input = document.querySelector('input[placeholder="Search..."]');
+        if (!input || input.dataset.attached === "true") return;
 
-        if (!input || input.dataset.listenerAttached === "true") return;
+        input.dataset.attached = "true";
 
-        input.dataset.listenerAttached = "true";
+        const queued = sessionStorage.getItem(EMPIRE_SEARCH_KEY);
+        if (!queued) return;
 
-        const parent =
-            input.closest('.mat-mdc-form-field-infix') ||
-            input.parentElement;
+        input.focus();
+        input.value = queued;
 
-        const resSpan = document.createElement("div");
-        resSpan.style = "font-size:12px; margin-top:4px;";
-        parent.appendChild(resSpan);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
 
-        const recalc = () => {
-            const rate = parseFloat(localStorage.getItem(STORAGE_KEY));
-            const price = parseFloat(
-                input.value.replace(/,/g, "").trim()
-            );
+        sessionStorage.removeItem(EMPIRE_SEARCH_KEY);
 
-            if (!rate || isNaN(price)) {
-                resSpan.innerHTML = "";
-                return;
-            }
-
-            const raw = price / (rate / 10);
-            const withFee = raw * 1.05;
-
-            resSpan.innerHTML = `
-                Empire:
-                <span style="color:#f44336">${raw.toFixed(2)}c</span>
-                |
-                <span style="color:#4caf50">${withFee.toFixed(2)}c</span>
-            `;
-        };
-
-        input.addEventListener("input", recalc);
-        setInterval(recalc, 500);
+        console.log("Empire search filled:", queued);
     }
 
     // ==========================================
@@ -247,7 +223,7 @@
         setupItemClicker();
 
         setTimeout(updatePrices, 1000);
-        setInterval(handleInputConversion, 1000);
+        setInterval(handleInputConversion, 500);
 
         new MutationObserver(() => updatePrices())
             .observe(document.body, {
