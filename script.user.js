@@ -1,49 +1,77 @@
 // ==UserScript==
 // @name         CSFloat -> Clipboard (Smart Wear)
 // @namespace    http://tampermonkey.net/
-// @version      2.1
-// @description  Kopiuje pełną nazwę przedmiotu do schowka po kliknięciu (format pod CSGOEmpire)
+// @version      2.2
+// @description  Kopiuje nazwę itemu + CTRL+Click otwiera CSGOEmpire search
 // @author       Gemini
 // @match        https://csfloat.com/*
 // @grant        none
-// @downloadURL  https://github.com/regov124356/csfloat-empire-tools/raw/refs/heads/main/script.user.js
-// @updateURL    https://github.com/regov124356/csfloat-empire-tools/raw/refs/heads/main/script.user.js
+// @downloadURL  https://raw.githubusercontent.com/regov124356/csfloat-empire-tools/main/script.user.js
+// @updateURL    https://raw.githubusercontent.com/regov124356/csfloat-empire-tools/main/script.user.js
 // ==/UserScript==
 
 (function () {
     'use strict';
 
     const STORAGE_KEY = "empire_rate";
-    const WEARS = ["Factory New", "Minimal Wear", "Field-Tested", "Well-Worn", "Battle-Scarred"];
+    const WEARS = [
+        "Factory New",
+        "Minimal Wear",
+        "Field-Tested",
+        "Well-Worn",
+        "Battle-Scarred"
+    ];
 
     // ==========================================
-    // LOGIKA KOPIOWANIA DO SCHOWKA
+    // LOGIKA KLIKANIA
     // ==========================================
     function setupItemClicker() {
         document.addEventListener('click', (e) => {
             const targetHeader = e.target.closest('mat-card > div > div:first-child');
+
             if (!targetHeader || !targetHeader.querySelector('app-item-name')) return;
 
             const nameEl = targetHeader.querySelector('.item-name');
             const subtextEl = targetHeader.querySelector('.subtext');
 
-            if (nameEl) {
-                let itemName = nameEl.innerText.trim();
+            if (!nameEl) return;
 
-                // Usuwanie "★ " z początku nazwy
-                itemName = itemName.replace(/^★\s*/, '');
+            let itemName = nameEl.innerText.trim();
 
-                let subtext = subtextEl ? subtextEl.innerText.trim() : "";
-                let finalQuery = itemName;
+            // usuwanie ★ z początku
+            itemName = itemName.replace(/^★\s*/, '');
 
-                let foundWear = WEARS.find(wear => subtext.includes(wear));
+            let subtext = subtextEl ? subtextEl.innerText.trim() : "";
+            let finalQuery = itemName;
 
-                if (foundWear) {
-                    finalQuery += ` (${foundWear})`;
-                }
+            const foundWear = WEARS.find(wear => subtext.includes(wear));
 
-                navigator.clipboard.writeText(finalQuery).then(() => {
-                    console.log("Skopiowano do schowka:", finalQuery);
+            if (foundWear) {
+                finalQuery += ` (${foundWear})`;
+            }
+
+            // ==========================================
+            // CTRL + CLICK = otwórz Empire search
+            // ==========================================
+            if (e.ctrlKey) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const empireUrl =
+                    `https://csgoempire.com/market?search=${encodeURIComponent(finalQuery)}`;
+
+                window.open(empireUrl, '_blank');
+
+                console.log("Otwarto Empire search:", finalQuery);
+                return;
+            }
+
+            // ==========================================
+            // NORMAL CLICK = kopiowanie
+            // ==========================================
+            navigator.clipboard.writeText(finalQuery)
+                .then(() => {
+                    console.log("Skopiowano:", finalQuery);
 
                     const originalBg = targetHeader.style.background;
                     targetHeader.style.background = "rgba(76, 175, 80, 0.3)";
@@ -51,19 +79,20 @@
                     setTimeout(() => {
                         targetHeader.style.background = originalBg;
                     }, 300);
-
-                }).catch(err => {
-                    console.error("Błąd podczas kopiowania:", err);
+                })
+                .catch(err => {
+                    console.error("Błąd kopiowania:", err);
                 });
-            }
+
         }, true);
     }
 
     // ==========================================
-    // STYLE I UI
+    // STYLE
     // ==========================================
     function injectStyles() {
         const style = document.createElement('style');
+
         style.innerHTML = `
             mat-card > div > div:first-child:has(app-item-name) {
                 cursor: copy !important;
@@ -72,38 +101,42 @@
             }
 
             mat-card > div > div:first-child:has(app-item-name):hover {
-                background: rgba(255, 255, 255, 0.07) !important;
+                background: rgba(255,255,255,0.07) !important;
             }
         `;
+
         document.head.appendChild(style);
     }
 
+    // ==========================================
+    // RATE UI
+    // ==========================================
     function createInput() {
-        if (document.getElementById('empire-rate-ui')) return;
+        if (document.getElementById("empire-rate-ui")) return;
 
         const container = document.createElement("div");
-        container.id = 'empire-rate-ui';
+        container.id = "empire-rate-ui";
         container.style = `
-            position:fixed;
-            top:10px;
-            left:10px;
-            z-index:9999;
-            background:#111;
-            padding:8px 12px;
-            border-radius:8px;
-            color:white;
-            font-size:12px;
-            border:1px solid #444;
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 9999;
+            background: #111;
+            padding: 8px 12px;
+            border-radius: 8px;
+            color: white;
+            font-size: 12px;
+            border: 1px solid #444;
         `;
 
         const input = document.createElement("input");
         input.type = "number";
         input.style = `
-            width:70px;
-            background:#222;
-            color:white;
-            border:1px solid #444;
-            margin-left:5px;
+            width: 70px;
+            background: #222;
+            color: white;
+            border: 1px solid #444;
+            margin-left: 5px;
         `;
 
         const saved = localStorage.getItem(STORAGE_KEY);
@@ -116,9 +149,13 @@
 
         container.appendChild(document.createTextNode("Rate: "));
         container.appendChild(input);
+
         document.body.appendChild(container);
     }
 
+    // ==========================================
+    // PRICE CONVERTER
+    // ==========================================
     function updatePrices() {
         const rate = parseFloat(localStorage.getItem(STORAGE_KEY));
         if (!rate) return;
@@ -139,9 +176,9 @@
 
             const res = document.createElement("span");
             res.style = `
-                margin-left:6px;
-                font-size:11px;
-                white-space:nowrap;
+                margin-left: 6px;
+                font-size: 11px;
+                white-space: nowrap;
             `;
 
             res.innerHTML = `
@@ -155,8 +192,14 @@
         });
     }
 
+    // ==========================================
+    // INPUT CONVERTER
+    // ==========================================
     function handleInputConversion() {
-        const input = document.querySelector('input[formcontrolname="price"]');
+        const input = document.querySelector(
+            'input[formcontrolname="price"]'
+        );
+
         if (!input || input.dataset.listenerAttached === "true") return;
 
         input.dataset.listenerAttached = "true";
@@ -165,7 +208,7 @@
             input.closest('.mat-mdc-form-field-infix') ||
             input.parentElement;
 
-        let resSpan = document.createElement("div");
+        const resSpan = document.createElement("div");
         resSpan.style = "font-size:12px; margin-top:4px;";
         parent.appendChild(resSpan);
 
@@ -196,12 +239,13 @@
     }
 
     // ==========================================
-    // INICJALIZACJA
+    // INIT
     // ==========================================
     function init() {
         injectStyles();
         createInput();
         setupItemClicker();
+
         setTimeout(updatePrices, 1000);
         setInterval(handleInputConversion, 1000);
 
@@ -212,7 +256,7 @@
             });
     }
 
-    if (document.readyState === 'complete') {
+    if (document.readyState === "complete") {
         init();
     } else {
         window.addEventListener("load", init);
