@@ -6,8 +6,8 @@
 // @author       Gemini
 // @match        https://csfloat.com/*
 // @grant        none
-// @downloadURL  https://raw.githubusercontent.com/regov124356/csfloat-empire-tools/main/script.user.js
-// @updateURL    https://raw.githubusercontent.com/regov124356/csfloat-empire-tools/main/script.user.js
+// @downloadURL  https://raw.githubusercontent.com/regov124356/csfloat-empire-tools/main/script.user.js?ts=2.4
+// @updateURL    https://raw.githubusercontent.com/regov124356/csfloat-empire-tools/main/script.user.js?ts=2.4
 // ==/UserScript==
 
 (function () {
