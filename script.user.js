@@ -61,7 +61,7 @@
                 sessionStorage.setItem(EMPIRE_SEARCH_KEY, finalQuery);
 
                 // otwieramy stronę (bez URL search, bo nie działa)
-                window.open("https://csgoempire.com/withdrawals", "_blank");
+                window.open("https://csgoempire.com/withdraw/steam/market", "_blank");
 
                 console.log("Empire auto-search queued:", finalQuery);
                 return;
