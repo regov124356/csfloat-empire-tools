@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CSFloat -> Clipboard (Smart Wear)
 // @namespace    http://tampermonkey.net/
-// @version      2.6
+// @version      2.7
 // @description  Kopiuje nazwę itemu + CTRL+Click otwiera CSGOEmpire search (auto-fill)
 // @author       Gemini
 // @match        https://csfloat.com/*
@@ -18,6 +18,21 @@
     const WEARS = [
         "Factory New", "Minimal Wear", "Field-Tested", "Well-Worn", "Battle-Scarred"
     ];
+
+    // Funkcja do oszukiwania frameworków (React/Vue/Angular)
+    function setNativeValue(element, value) {
+        const valueSetter = Object.getOwnPropertyDescriptor(element, 'value')?.set;
+        const prototype = Object.getPrototypeOf(element);
+        const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+
+        if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {
+            prototypeValueSetter.call(element, value);
+        } else if (valueSetter) {
+            valueSetter.call(element, value);
+        } else {
+            element.value = value;
+        }
+    }
 
     // ==========================================
     // LOGIKA DLA CSFLOAT.COM
@@ -50,7 +65,6 @@
             if (e.ctrlKey) {
                 e.preventDefault();
                 e.stopPropagation();
-                // Przekazujemy query w hash'u URL (obejście braku wspólnego sessionStorage)
                 const empireUrl = `https://csgoempire.com/withdraw/steam/market#search=${encodeURIComponent(finalQuery)}`;
                 window.open(empireUrl, "_blank");
                 return;
@@ -108,7 +122,7 @@
     }
 
     // ==========================================
-    // LOGIKA DLA CSGOEMPIRE.COM (Auto-fill)
+    // LOGIKA DLA CSGOEMPIRE.COM (Hard-wait & Force-input)
     // ==========================================
     function handleEmpireSearch() {
         if (!window.location.hash.includes('#search=')) return;
@@ -116,20 +130,37 @@
         const query = decodeURIComponent(window.location.hash.split('#search=')[1]);
         if (!query) return;
 
+        console.log("[Script] Czekam na wyszukiwarkę dla:", query);
+
         const searchInterval = setInterval(() => {
-            const input = document.querySelector('input[placeholder*="Search"], input[type="text"]');
+            // Szukamy inputa w sekcji marketu (bardziej precyzyjnie)
+            const input = document.querySelector('.search-input input, input[placeholder*="Search"], input[type="text"]');
 
             if (input) {
                 clearInterval(searchInterval);
+                console.log("[Script] Znaleziono input, wstrzykuję dane...");
+
+                // 1. Kliknij i zfocusuj
+                input.click();
                 input.focus();
-                input.value = query;
+
+                // 2. Wymuś wartość przez natywny setter
+                setNativeValue(input, query);
+
+                // 3. Wyślij serię eventów, żeby strona "uwierzyła"
                 input.dispatchEvent(new Event('input', { bubbles: true }));
                 input.dispatchEvent(new Event('change', { bubbles: true }));
-                window.location.hash = ""; // Czyścimy URL po wpisaniu
-            }
-        }, 500);
+                
+                // Opcjonalnie: Enter (jeśli samo wpisanie nie wystarczy)
+                input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
 
-        setTimeout(() => clearInterval(searchInterval), 10000); // Stop po 10s jeśli nie znajdzie
+                // Czyścimy hash
+                window.location.hash = "";
+            }
+        }, 800); // Co 800ms sprawdza czy input już jest
+
+        // Kill-switch po 15 sekundach
+        setTimeout(() => clearInterval(searchInterval), 15000);
     }
 
     // ==========================================
@@ -139,6 +170,7 @@
         if (document.readyState === "complete") initCSFloat();
         else window.addEventListener("load", initCSFloat);
     } else if (window.location.hostname.includes("csgoempire.com")) {
+        // Na Empire odpalamy od razu, bo handleEmpireSearch ma w sobie setInterval (czekanie)
         handleEmpireSearch();
     }
 })();
